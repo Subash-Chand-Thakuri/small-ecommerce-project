@@ -1,9 +1,7 @@
-// Products.tsx (React frontend in TypeScript)
 import React, { useState } from "react";
 import axiosInstance from "../utils/axiosInstance";
 import { useQuery } from "@tanstack/react-query";
 
-// Define types for products and packages
 interface Product {
   id: number;
   name: string;
@@ -12,7 +10,7 @@ interface Product {
 }
 
 interface Package {
-  items: string[];
+  items: Product[];
   totalWeight: number;
   totalPrice: number;
   courierPrice: number;
@@ -29,6 +27,7 @@ const fetchProductLists = async (): Promise<Product[]> => {
 };
 
 const Products: React.FC = () => {
+
   const {
     data: productsList = [],
     isLoading,
@@ -37,11 +36,11 @@ const Products: React.FC = () => {
     queryKey: ["products"],
     queryFn: fetchProductLists,
   });
+
   const [selectedProducts, setSelectedProducts] = useState<Product[]>([]);
   const [packages, setPackages] = useState<Package[]>([]);
 
-  //   console.log(productsList);
-
+  // Toggle product selection for placing an order
   const toggleProduct = (product: Product) => {
     setSelectedProducts((prevSelected) =>
       prevSelected.includes(product)
@@ -50,18 +49,16 @@ const Products: React.FC = () => {
     );
   };
 
-  // Place order handler
+  // Place order handler: Sends selected products to the backend
   const placeOrder = async () => {
-    console.log('Selected products:',selectedProducts)
+    console.log("Selected products:", selectedProducts);
     try {
-      const response = await axiosInstance.post(
-        "/place-order",
-        {
-            products: selectedProducts
-        }
-      );
+      const response = await axiosInstance.post("/place-order", {
+        products: selectedProducts,
+      });
 
-      const data = await response.data;
+      const data = response.data;
+      // console.log("packages:", data);
       setPackages(data.packages);
     } catch (error) {
       console.error("Error placing order:", error);
@@ -69,7 +66,7 @@ const Products: React.FC = () => {
   };
 
   if (isLoading) return <div>Loading...</div>;
-  if (error) return <div>{error.message}</div>;
+  if (error) return <div>{(error as Error).message}</div>;
 
   return (
     <div>
@@ -96,7 +93,8 @@ const Products: React.FC = () => {
           {packages.map((pkg, index) => (
             <div key={index}>
               <h3>Package {index + 1}</h3>
-              <p>Items: {pkg.items.join(", ")}</p>
+              <p> Items:{" "}
+          {pkg.items.map((item: Product) => item.name).join(", ")}</p>
               <p>Total weight: {pkg.totalWeight}g</p>
               <p>Total price: ${pkg.totalPrice.toFixed(2)}</p>
               <p>Courier price: ${pkg.courierPrice.toFixed(2)}</p>

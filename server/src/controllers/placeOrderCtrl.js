@@ -16,7 +16,6 @@ const getCourierCostFromDB = async () => {
 function calculateCourierCost(weight, COURIER_COSTS) {
     for (const cost of COURIER_COSTS) {
         const [min, max] = cost.range.split('-').map(w => parseInt(w));
-        console.log('min:',min," max:",max)
         if (weight >= min && weight <= max) {
             return cost.price;
         }
@@ -24,10 +23,42 @@ function calculateCourierCost(weight, COURIER_COSTS) {
     return 0;
 }
 
+// Function to balance weights between packages by redistributing items
+function balancePackages(packages) {
+    let totalWeight = packages.reduce((sum, pkg) => sum + pkg.totalWeight, 0);
+    let averageWeight = totalWeight / packages.length;
+
+    // Sort packages by total weight in descending order
+    packages.sort((a, b) => b.totalWeight - a.totalWeight);
+
+    for (let i = 0; i < packages.length - 1; i++) {
+        let currentPackage = packages[i];
+
+        // Move items from the heavier package to the next one until weights are balanced
+        for (let j = i + 1; j < packages.length; j++) {
+            const nextPackage = packages[j];
+
+            while (currentPackage.totalWeight > averageWeight && nextPackage.totalWeight < averageWeight) {
+                const productToMove = currentPackage.items.pop(); // Remove the last item (heaviest remaining)
+
+                if (productToMove) {
+                    currentPackage.totalWeight -= productToMove.weight;
+                    nextPackage.items.push(productToMove);
+                    nextPackage.totalWeight += productToMove.weight;
+                } else {
+                    break; // Stop if no more items can be moved
+                }
+            }
+        }
+    }
+
+    return packages;
+}
+
 export const getPlaceOrder = asyncHandler(async (req, res) => {
     try {
         const products = req.body.products;
-        
+
         const dbCourierCosts = await getCourierCostFromDB();
         const COURIER_COSTS = dbCourierCosts ?? [
             { range: '0-200', price: 5 },
@@ -36,8 +67,8 @@ export const getPlaceOrder = asyncHandler(async (req, res) => {
             { range: '1000-5000', price: 20 },
         ];
 
-        // Sort products by weight for optimization
-        products.sort((a, b) => b.weight - a.weight);
+        // Sort products by weight in ascending order
+        products.sort((a, b) => a.weight - b.weight);
 
         let packages = [];
         let currentPackage = { items: [], totalWeight: 0, totalPrice: 0 };
@@ -51,7 +82,7 @@ export const getPlaceOrder = asyncHandler(async (req, res) => {
             }
 
             // Add product to the package
-            currentPackage.items.push(product.name);
+            currentPackage.items.push(product);
             currentPackage.totalWeight += product.weight;
             currentPackage.totalPrice += product.price;
         }
@@ -60,6 +91,9 @@ export const getPlaceOrder = asyncHandler(async (req, res) => {
         if (currentPackage.items.length > 0) {
             packages.push(currentPackage);
         }
+
+        // Balance the packages to distribute weight evenly
+        packages = balancePackages(packages);
 
         // Calculate the courier price for each package
         packages = packages.map(pkg => ({
